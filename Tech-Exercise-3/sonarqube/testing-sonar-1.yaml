@@ -1,0 +1,66 @@
+## Sonarqube is a tool that performs static code analysis. It looks for pitfalls in coding and reports them. It’s great tool for catching vulnerabilities!
+#################################################################################################
+
+
+echo export TEAM_NAME="glsteam" | tee -a ~/.bashrc -a ~/.zshrc
+echo export CLUSTER_DOMAIN="apps.ocp4.example.com" | tee -a ~/.bashrc -a ~/.zshrc
+echo export GIT_SERVER="gitlab-ce.apps.ocp4.example.com" | tee -a ~/.bashrc -a ~/.zshrc
+
+source ~/.zshrc
+echo ${TEAM_NAME}
+echo ${CLUSTER_DOMAIN}
+echo ${GIT_SERVER}
+
+
+oc login --server=https://api.${CLUSTER_DOMAIN##apps.}:6443 -u lab03 -p lab03
+
+cat << EOF > /tmp/sonarqube-auth.yaml
+apiVersion: v1
+data:
+  username: "$(echo -n admin | base64 -w0)"
+  password: "$(echo -n admin123 | base64 -w0)"
+  currentAdminPassword: "$(echo -n admin | base64 -w0)"
+kind: Secret
+metadata:
+  labels:
+    credential.sync.jenkins.openshift.io: "true"
+  name: sonarqube-auth
+EOF
+
+kubeseal < /tmp/sonarqube-auth.yaml > /tmp/sealed-sonarqube-auth.yaml -n ${TEAM_NAME}-ci-cd --controller-namespace tl500-shared --controller-name sealed-secrets -o yaml
+
+
+cat /tmp/sealed-sonarqube-auth.yaml| grep -E 'username|password|currentAdminPassword'
+
+#### UPDATE THE values-tooling.yaml.postauth with current credentials and follow next step.
+#### REPLACE THE values-tooling.yaml.postauth to values-tooling.yaml
+### THEN PROCEED TO NEXT STEPS
+
+git pull -rebase
+sleep 5
+cd /projects/tech-exercise
+git add ubiquitous-journey/values-tooling.yaml
+git commit -m  "🍳 ADD - sonarqube creds sealed secret 🍳"
+git push
+
+sleep 30
+
+oc get secrets -n glsteam-ci-cd | grep sonarqube-auth
+
+### REPLACE values-tooling.yaml.postsonar to values-tooling.yaml and run next steps
+
+
+cd /projects/tech-exercise
+git add .
+git commit -m  "🦇 ADD - sonarqube 🦇"
+git push 
+
+####  Get sonarqube console URL and check
+
+sleep 40
+
+echo https://$(oc get route sonarqube --template='{{ .spec.host }}' -n ${TEAM_NAME}-ci-cd)
+
+
+
+
